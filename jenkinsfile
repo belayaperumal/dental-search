@@ -37,7 +37,6 @@ try {
         }
       }
    }
-} 
 } catch (err) {
    echo "in catch block"
    echo "Caught: ${err}"
