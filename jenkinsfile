@@ -1,6 +1,5 @@
-
-def templatePath = 'https://github.com/belayaperumal/pipeline-builds/blob/master/openshift-pipeline.yaml'  
-def APP_NAME= 'openshift-pipeline-demo1'
+  
+def APP_NAME= 'dental-search'
 try {
    timeout(time: 20, unit: 'MINUTES') {
       def appName="${APP_NAME}"
@@ -10,23 +9,14 @@ try {
           project = env.PROJECT_NAME
         }
       }
-      node("maven") {
-        stage("Checkout") {
-          git url: "https://github.com/efsavage/hello-world-war.git", branch: "master"
-        }
-        stage("Build WAR") {
-          sh "mvn clean package -Popenshift"
-          stash name:"war", includes:"target/hello-world-war-1.0.0.war"
-        }
-      }
       node {
-        stage("Build Image") {
-          unstash name:"war"
-          sh "oc start-build ${appName}-docker --from-file=target/hello-world-war-1.0.0.war -n ${project}"
+        stage("Building Image") {
+          sh "oc create -f https://github.com/belayaperumal/dental-search/blob/master/openshift-pipeline.yaml"
+          sh "oc start-build ${appName} -n ${project}"
           timeout(time: 20, unit: 'MINUTES') {
             openshift.withCluster() {
               openshift.withProject() {
-                def bc = openshift.selector('bc', "${appName}-docker")
+                def bc = openshift.selector('bc', "${appName}")
                 echo "Found 1 ${bc.count()} buildconfig"
                 def blds = bc.related('builds')
                 blds.untilEach {
