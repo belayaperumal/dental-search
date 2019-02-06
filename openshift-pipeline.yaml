@@ -49,19 +49,13 @@ objects:
       jenkinsPipelineStrategy:
         jenkinsfile: ""
       type: JenkinsPipeline
-    triggers:
-    - github:
-        secret: "${GITHUB_WEBHOOK_SECRET}"
-      type: GitHub
-    - generic:
-        secret: "${GENERIC_WEBHOOK_SECRET}"
-      type: Generic
+   
 - apiVersion: v1
   kind: BuildConfig
   metadata:
     labels:
-      app: ${APP_NAME}
-    name: ${APP_NAME}
+      app: ${APP_NAME}-docker
+    name: ${APP_NAME}-docker
   spec:
     output:
       to:
