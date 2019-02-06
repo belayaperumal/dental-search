@@ -69,14 +69,6 @@ objects:
     runPolicy: Serial
     triggers: []
 - apiVersion: v1
-  kind: ConfigMap
-  metadata:
-    name: app-db-config
-    labels:
-      app: ${APPNAME}
-  data: app-db-config
-key: 
-- apiVersion: v1
   kind: DeploymentConfig
   metadata:
     labels:
@@ -101,12 +93,15 @@ key:
           app: ${APP_NAME}
           deploymentconfig: ${APP_NAME}
       spec:
-        containers:
-        - image: ${APP_NAME}:latest
+      containers:
+        - envFrom:
+            - configMapRef:
+                name: app-db-config
+           - image: microservices/dental-search-controller:0.39.6-SNAPSHOT
           imagePullPolicy: Always
           name: ${APP_NAME}
           ports:
-          - containerPort: 8080
+          - containerPort: 8100
             protocol: TCP
           resources: {}
           terminationMessagePath: /dev/termination-log
@@ -131,6 +126,8 @@ key:
             successThreshold: 1
             failureThreshold: 3
         dnsPolicy: ClusterFirst
+        imagePullSecrets:
+        - name: nihbdocker
         restartPolicy: Always
         securityContext: {}
         terminationGracePeriodSeconds: 30
