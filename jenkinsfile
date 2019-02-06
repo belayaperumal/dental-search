@@ -1,5 +1,6 @@
   
 def APP_NAME= 'dental-search'
+pipeline {
 try {
    timeout(time: 20, unit: 'MINUTES') {
       def appName="${APP_NAME}"
@@ -36,7 +37,8 @@ try {
         }
       }
    }
-} catch (err) {
+} 
+}catch (err) {
    echo "in catch block"
    echo "Caught: ${err}"
    currentBuild.result = 'FAILURE'
