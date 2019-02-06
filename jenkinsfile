@@ -38,7 +38,7 @@ try {
       }
    }
 } 
-}catch (err) {
+} catch (err) {
    echo "in catch block"
    echo "Caught: ${err}"
    currentBuild.result = 'FAILURE'
