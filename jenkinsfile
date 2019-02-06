@@ -1,5 +1,5 @@
   
-def APP_NAME= 'dental-search'
+def APP_NAME= 'dental-search-controller'
 try {
    timeout(time: 20, unit: 'MINUTES') {
       def appName="${APP_NAME}"
@@ -11,7 +11,7 @@ try {
       }
       node {
         stage("Building Image") {
-          sh "oc create -f https://github.com/belayaperumal/dental-search/blob/master/openshift-pipeline.yaml"
+          sh "oc create -f https://github.com/belayaperumal/dental-search/blob/master/openshift-pipeline.yaml -n pipeline"
           sh "oc start-build ${appName} -n ${project}"
           timeout(time: 20, unit: 'MINUTES') {
             openshift.withCluster() {
