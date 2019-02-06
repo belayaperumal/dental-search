@@ -1,6 +1,5 @@
   
 def APP_NAME= 'dental-search'
-pipeline {
 try {
    timeout(time: 20, unit: 'MINUTES') {
       def appName="${APP_NAME}"
