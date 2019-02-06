@@ -1,10 +1,35 @@
 apiVersion: v1
 kind: Template
 metadata:
-  name: openshift-pipeline
+  name: openshift-pipeline-demo1
 parameters:
 - name: APP_NAME
-  value: dental-search-controller
+  description: The name assigned to all of the application objects defined in this template.
+  displayName: Application Name
+  required: true
+  value: openshift-pipeline-sample
+- name: GIT_SOURCE_URL
+  description: The source URL for the application
+  displayName: Source URL
+  required: true
+  value: https://github.com/efsavage/hello-world-war.git
+- name: GIT_SOURCE_REF
+  description: The source Ref for the application
+  displayName: Source Ref
+  required: true
+  value: master
+- description: Github trigger secret.  A difficult to guess string encoded as part of the webhook URL.  Not encrypted.
+  displayName: GitHub Webhook Secret
+  from: '[a-zA-Z0-9]{40}'
+  generate: expression
+  name: GITHUB_WEBHOOK_SECRET
+  required: true
+- description: A secret string used to configure the Generic webhook.
+  displayName: Generic Webhook Secret
+  from: '[a-zA-Z0-9]{40}'
+  generate: expression
+  name: GENERIC_WEBHOOK_SECRET
+  required: true
 objects:
 - apiVersion: v1
   kind: ImageStream
@@ -18,27 +43,29 @@ objects:
 - apiVersion: v1
   kind: ImageStream
   metadata:
-    name: dental-search-controller
+    name: wildfly
   spec:
     tags:
     - annotations:
-        tags: dental-search-controller
-        version: "0.39.6-SNAPSHOT"
+        supports: wildfly:10.1,jee,java
+        tags: builder,wildfly,java
+        version: "10.1"
       from:
         kind: DockerImage
-        name: microservices/dental-search-controller:0.39.6-SNAPSHOT
-      name: "0.39.6-SNAPSHOT"
+        name: openshift/wildfly-101-centos7:latest
+      name: "10.1"
     - annotations:
-       tags: dental-search-controller
+        supports: jee,java
+        tags: builder,wildfly,java
       from:
         kind: ImageStreamTag
-        name: "0.39.6-SNAPSHOT"
+        name: "10.1"
       name: latest
 - apiVersion: v1
   kind: BuildConfig
   metadata:
     annotations:
-      pipeline.alpha.openshift.io/uses: '[{"name": "${APP_NAME}", "namespace": "", "kind": "DeploymentConfig"}]'
+      pipeline.alpha.openshift.io/uses: '[{"name": "${NAME}", "namespace": "", "kind": "DeploymentConfig"}]'
     creationTimestamp: null
     labels:
       name: ${APP_NAME}
@@ -47,49 +74,65 @@ objects:
     strategy:
       jenkinsPipelineStrategy:
         jenkinsfile: |-
-        try {
-   timeout(time: 20, unit: 'MINUTES') {
-      def appName="${APP_NAME}"
-      def project=""
-      node {
-        stage("Initialize") {
-          project = env.PROJECT_NAME
-        }
-      }
-      node {
-        stage("Building Image") {
-        sh "oc start-build ${appName}-docker -n ${project}"
-          timeout(time: 20, unit: 'MINUTES') {
-            openshift.withCluster() {
-              openshift.withProject() {
-                def bc = openshift.selector('bc', "${appName}-docker")
-                echo "Found 1 ${bc.count()} buildconfig"
-                def blds = bc.related('builds')
-                blds.untilEach {
-                  return it.object().status.phase == "Complete"
+          try {
+             timeout(time: 20, unit: 'MINUTES') {
+                def appName="${APP_NAME}"
+                def project=""
+                node {
+                  stage("Initialize") {
+                    project = env.PROJECT_NAME
+                  }
                 }
-              }
-            }  
+                node("maven") {
+                  stage("Checkout") {
+                    git url: "${GIT_SOURCE_URL}", branch: "${GIT_SOURCE_REF}"
+                  }
+                  stage("Build WAR") {
+                    sh "mvn clean package -Popenshift"
+                    stash name:"war", includes:"target/ROOT.war"
+                  }
+                }
+                node {
+                  stage("Build Image") {
+                    unstash name:"war"
+                    sh "oc start-build ${appName}-docker --from-file=target/ROOT.war -n ${project}"
+                    timeout(time: 20, unit: 'MINUTES') {
+                      openshift.withCluster() {
+                        openshift.withProject() {
+                          def bc = openshift.selector('bc', "${appName}-docker")
+                          echo "Found 1 ${bc.count()} buildconfig"
+                          def blds = bc.related('builds')
+                          blds.untilEach {
+                            return it.object().status.phase == "Complete"
+                          }
+                        }
+                      }  
+                    }
+                  }
+                  stage("Deploy") {
+                    openshift.withCluster() {
+                      openshift.withProject() {
+                        def dc = openshift.selector('dc', "${appName}")
+                        dc.rollout().status()
+                      }
+                    }
+                  }
+                }
+             }
+          } catch (err) {
+             echo "in catch block"
+             echo "Caught: ${err}"
+             currentBuild.result = 'FAILURE'
+             throw err
           }
-        }
-        stage("Deploy") {
-          openshift.withCluster() {
-            openshift.withProject() {
-              def dc = openshift.selector('dc', "${appName}")
-              dc.rollout().status()
-            }
-          }
-        }
-      }
-   }
-} catch (err) {
-   echo "in catch block"
-   echo "Caught: ${err}"
-   currentBuild.result = 'FAILURE'
-   throw err
-}
       type: JenkinsPipeline
-   
+    triggers:
+    - github:
+        secret: "${GITHUB_WEBHOOK_SECRET}"
+      type: GitHub
+    - generic:
+        secret: "${GENERIC_WEBHOOK_SECRET}"
+      type: Generic
 - apiVersion: v1
   kind: BuildConfig
   metadata:
@@ -104,6 +147,20 @@ objects:
     postCommit: {}
     resources: {}
     runPolicy: Serial
+    source:
+      dockerfile: |-
+        FROM wildfly
+        COPY ROOT.war /wildfly/standalone/deployments/ROOT.war
+        CMD $STI_SCRIPTS_PATH/run
+      binary:
+        asFile: ROOT.war
+      type: Docker
+    strategy:
+      dockerStrategy:
+        from:
+          kind: ImageStreamTag
+          name: wildfly:latest
+      type: Docker
     triggers: []
 - apiVersion: v1
   kind: DeploymentConfig
@@ -130,15 +187,12 @@ objects:
           app: ${APP_NAME}
           deploymentconfig: ${APP_NAME}
       spec:
-      containers:
-        - envFrom:
-            - configMapRef:
-                name: app-db-config
-           - image: microservices/dental-search-controller:0.39.6-SNAPSHOT
+        containers:
+        - image: ${APP_NAME}:latest
           imagePullPolicy: Always
           name: ${APP_NAME}
           ports:
-          - containerPort: 8100
+          - containerPort: 8080
             protocol: TCP
           resources: {}
           terminationMessagePath: /dev/termination-log
@@ -163,8 +217,6 @@ objects:
             successThreshold: 1
             failureThreshold: 3
         dnsPolicy: ClusterFirst
-        imagePullSecrets:
-        - name: nihbdocker
         restartPolicy: Always
         securityContext: {}
         terminationGracePeriodSeconds: 30
@@ -193,7 +245,7 @@ objects:
     - name: 8080-tcp
       port: 8080
       protocol: TCP
-      targetPort: 8100
+      targetPort: 8080
     selector:
       app: ${APP_NAME}
       deploymentconfig: ${APP_NAME}
@@ -213,5 +265,5 @@ objects:
       name: ${APP_NAME}
       weight: 100
     port:
-      targetPort: 81000-tcp
+      targetPort: 8080-tcp
 wildcardPolicy: None
