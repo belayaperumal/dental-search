@@ -74,8 +74,8 @@ objects:
     name: app-db-config
     labels:
       app: ${APPNAME}
-  data:
-key: ""
+  data: app-db-config
+key: 
 - apiVersion: v1
   kind: DeploymentConfig
   metadata:
