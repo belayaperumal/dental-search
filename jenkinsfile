@@ -11,11 +11,11 @@ try {
       }
       node {
         stage("Building Image") {
-        sh "oc start-build ${appName} --from-file=https://github.com/belayaperumal/dental-search/blob/master/openshift-pipeline.yaml -n ${project}"
+        sh "oc start-build ${appName}-docker --from-file=https://github.com/belayaperumal/dental-search/blob/master/openshift-pipeline.yaml -n ${project}"
           timeout(time: 20, unit: 'MINUTES') {
             openshift.withCluster() {
               openshift.withProject() {
-                def bc = openshift.selector('bc', "${appName}")
+                def bc = openshift.selector('bc', "${appName}-docker")
                 echo "Found 1 ${bc.count()} buildconfig"
                 def blds = bc.related('builds')
                 blds.untilEach {
