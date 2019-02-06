@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Template
 metadata:
-  name: openshift-pipeline-demo1
+  name: openshift-pipeline
 objects:
 - apiVersion: v1
   kind: ImageStream
@@ -15,29 +15,27 @@ objects:
 - apiVersion: v1
   kind: ImageStream
   metadata:
-    name: wildfly
+    name: dental-search-controller
   spec:
     tags:
     - annotations:
-        supports: wildfly:10.1,jee,java
-        tags: builder,wildfly,java
-        version: "10.1"
+        tags: dental-search-controller
+        version: "0.39.6-SNAPSHOT"
       from:
         kind: DockerImage
-        name: openshift/wildfly-101-centos7:latest
-      name: "10.1"
+        name: microservices/dental-search-controller:0.39.6-SNAPSHOT
+      name: "0.39.6-SNAPSHOT"
     - annotations:
-        supports: jee,java
-        tags: builder,wildfly,java
+       tags: dental-search-controller
       from:
         kind: ImageStreamTag
-        name: "10.1"
+        name: "0.39.6-SNAPSHOT"
       name: latest
 - apiVersion: v1
   kind: BuildConfig
   metadata:
     annotations:
-      pipeline.alpha.openshift.io/uses: '[{"name": "${NAME}", "namespace": "", "kind": "DeploymentConfig"}]'
+      pipeline.alpha.openshift.io/uses: '[{"name": "${APP_NAME}", "namespace": "", "kind": "DeploymentConfig"}]'
     creationTimestamp: null
     labels:
       name: ${APP_NAME}
@@ -58,8 +56,8 @@ objects:
   kind: BuildConfig
   metadata:
     labels:
-      app: ${APP_NAME}-docker
-    name: ${APP_NAME}-docker
+      app: ${APP_NAME}
+    name: ${APP_NAME}
   spec:
     output:
       to:
@@ -68,21 +66,15 @@ objects:
     postCommit: {}
     resources: {}
     runPolicy: Serial
-    source:
-      dockerfile: |-
-        FROM wildfly
-        COPY ROOT.war /wildfly/standalone/deployments/ROOT.war
-        CMD $STI_SCRIPTS_PATH/run
-      binary:
-        asFile: ROOT.war
-      type: Docker
-    strategy:
-      dockerStrategy:
-        from:
-          kind: ImageStreamTag
-          name: wildfly:latest
-      type: Docker
     triggers: []
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: app-db-config
+    labels:
+      app: ${APPNAME}
+  data:
+key: ""
 - apiVersion: v1
   kind: DeploymentConfig
   metadata:
@@ -166,7 +158,7 @@ objects:
     - name: 8080-tcp
       port: 8080
       protocol: TCP
-      targetPort: 8080
+      targetPort: 8100
     selector:
       app: ${APP_NAME}
       deploymentconfig: ${APP_NAME}
@@ -186,5 +178,5 @@ objects:
       name: ${APP_NAME}
       weight: 100
     port:
-      targetPort: 8080-tcp
+      targetPort: 81000-tcp
 wildcardPolicy: None
