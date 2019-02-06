@@ -3,6 +3,9 @@ apiVersion: v1
 kind: Template
 metadata:
   name: openshift-pipeline
+parameters:
+- name: APP_NAME
+  value: dental-search-controller
 objects:
 - apiVersion: v1
   kind: ImageStream
